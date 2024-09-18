@@ -15,8 +15,8 @@ This tool allows you to test bandwidth between a client and server by sending da
 
 1. Clone this repository:
    ```bash
-   git clone <https://github.com/maryam-ataei/NetPerfTestTool.git>
-   cd <NetPerfTestTool>
+   git clone https://github.com/maryam-ataei/NetPerfTestTool.git
+   cd NetPerfTestTool
    
 2. Ensure Python 3.x is installed on both the client and server machines.
 
