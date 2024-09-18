@@ -30,6 +30,7 @@ Start the server on the machine where you want to run the bandwidth test:
 
 ### Client
 Start the client on the machine where you want to initiate the test:
+
 `python client.py -s SERVER_IP [-p PORT] [-t TIME] [-R]`
 
 `-s SERVER_IP`: Required. The IP address of the server.
@@ -42,16 +43,22 @@ Start the client on the machine where you want to initiate the test:
 ### Normal Mode (Client Sends Data to Server)
 
 1. Start the server on the server machine:
+
 `python server.py`
+
 2. Start the client on the client machine:
+   
 `python client.py -s server_ip -t time -p port`
 
 
 ### Reverse Mode (Server Sends Data to Client)
 
 1. Start the server on the server machine:
+   
 `python server.py`
+
 2. Start the client on the client machine with the `-R` option:
+   
 `python client.py -s server_ip -t time -p port -R`
 
 
