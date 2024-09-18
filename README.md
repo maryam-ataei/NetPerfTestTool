@@ -1,6 +1,6 @@
 # Simple_Network_Performance_Tool
 
-A simple Python-based network performance test tool similar to `iperf3`. This tool allows you to test bandwidth between a client and server by sending data between them. It supports both normal and reverse modes, where the client can send data to the server or the server can send data to the client.
+This tool allows you to test bandwidth between a client and server by sending data between them. It supports both normal and reverse modes, where the client can send data to the server or the server can send data to the client.
 
 ## Features
 
