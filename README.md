@@ -36,8 +36,11 @@ python client.py -s SERVER_IP [-p PORT] [-t TIME] [-R]
 ```
 
 `-s SERVER_IP`: Required. The IP address of the server.
+
 `-p PORT`: Optional. The port of the server (default is 5201).
+
 `-t TIME`: Optional. The duration of the test in seconds (default is 10 seconds).
+
 `-R`: Optional. Enables reverse mode where the server sends data to the client.
 
 
