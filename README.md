@@ -40,34 +40,5 @@ python client.py -s SERVER_IP [-p PORT] [-t TIME] [-R]
 `-t TIME`: Optional. The duration of the test in seconds (default is 10 seconds).
 `-R`: Optional. Enables reverse mode where the server sends data to the client.
 
-## Example
-
-### Normal Mode (Client Sends Data to Server)
-
-1. Start the server on the server machine:
-   ```bash
-python server.py
-```
-
-2. Start the client on the client machine:
-      ```bash
-python client.py -s server_ip -t time -p port
-```
-
-
-### Reverse Mode (Server Sends Data to Client)
-
-1. Start the server on the server machine:
-     ```bash 
-python server.py
-```
-
-2. Start the client on the client machine with the `-R` option:
-      ```bash
-python client.py -s server_ip -t time -p port -R
-```
-
-
-
 
 
