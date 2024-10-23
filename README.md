@@ -102,6 +102,5 @@ python client.py -s 192.168.1.1 -R --iterations 5 --bytes 209715200 --sleep 5
 Server with a port change and 3 iterations in reverse mode:
 
 bash
-Copy code
 python server.py -p 5202 --iterations 3
 
