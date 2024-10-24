@@ -60,7 +60,7 @@ else:  # Reverse mode: server sends data to client
         print(f"[Server] Iteration {i+1} started at {datetime.now()}")
 
         # Phase 1: Increasing phase starts from the last constant rate
-        current_rate_mbps = start_throughput_mbps
+        current_rate_mbps = start_throughput_mbps  # Use the last constant rate from previous iteration
         increasing_phase_end = time.time() + args.normal_duration
 
         while time.time() < increasing_phase_end:
@@ -68,9 +68,13 @@ else:  # Reverse mode: server sends data to client
             chunk_size = min(BUFFER_SIZE, int(bytes_per_second))
             client_socket.sendall(DATA[:chunk_size])
             total_data_sent += chunk_size
-            
+
+            # Update the throughput naturally based on total data sent
             elapsed_time = time.time() - start_time
-            current_rate_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time  # Calculate current throughput
+            current_rate_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+
+            time.sleep(1)  # 1-second interval to simulate time passing
+
 
         print(f"[Server] Iteration {i+1}, Increasing Phase: Reached {current_rate_mbps:.2f} Mbps, Data sent: {total_data_sent / (1024 * 1024):.2f} MB")
 
