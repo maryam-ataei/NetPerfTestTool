@@ -17,7 +17,7 @@ This tool allows you to test bandwidth between a client and server by sending da
    ```bash
    git clone https://github.com/maryam-ataei/NetPerfTestTool.git
    cd NetPerfTestTool
-   
+
 2. Ensure Python 3.x is installed on both the client and server machines.
 
 ## Usage
@@ -55,9 +55,9 @@ It includes additional features for data transfer iterations, sleep intervals, a
 #### Server
 Start the server on the machine where you want to run the bandwidth test:
 
-bash
+```bash
 python server_side_with_new_feature.py [-p PORT] [--iterations ITERATIONS] [--sleep SLEEP] [--bytes BYTES] [--time TIME]
-
+```
 `-p PORT`: Optional. The port to listen on (default is 5201).
 
 `--iterations ITERATIONS`: Optional. Number of iterations for reverse mode.
@@ -71,9 +71,9 @@ python server_side_with_new_feature.py [-p PORT] [--iterations ITERATIONS] [--sl
 #### Client
 Start the client on the machine where you want to initiate the test:
 
-bash
+```bash
 python client_side_with_new_feature.py -s SERVER_IP [-p PORT] [-t TIME] [-R] [--iterations ITERATIONS] [--sleep SLEEP] [--bytes BYTES]
-
+```
 `-s SERVER_IP`: Required. The IP address of the server.
 
 `-p PORT`: Optional. The port of the server (default is 5201).
@@ -91,17 +91,16 @@ python client_side_with_new_feature.py -s SERVER_IP [-p PORT] [-t TIME] [-R] [--
 ##### Examples
 Normal mode with 10-second data transfer:
 
-bash
+```bash
 python client.py -s 192.168.1.1 -t 10
-
+```
 Reverse mode with 5 iterations, each transferring 200 MB and sleeping for 5 seconds:
 
-bash
+```bash
 python client.py -s 192.168.1.1 -R --iterations 5 --bytes 209715200 --sleep 5
-
+```
 Server with a port change and 3 iterations in reverse mode:
 
-bash
-Copy code
+```bash
 python server.py -p 5202 --iterations 3
-
+```
