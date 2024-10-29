@@ -63,10 +63,9 @@ else:  # Reverse mode: server sends data to client
     print("Reverse mode: server is sending data to client.")
 
     total_data_sent = 0
-    avg_throughput_mbps = 0  # To store average throughput during increasing phase
+    max_throughput_mbps = 0  # To store max throughput during increasing phase
 
     for i in range(args.iterations):
-
         print(f"[Server] Iteration {i+1} started at {datetime.now()}")
 
         start_time = time.time()
@@ -82,16 +81,20 @@ else:  # Reverse mode: server sends data to client
                     current_target_rate = args.target_rate
                 else:
                     # Subsequent iterations increase from the previous constant rate
-                    current_target_rate = avg_throughput_mbps + 0.2 * avg_throughput_mbps  # Increase by 20%
+                    current_target_rate = max_throughput_mbps + 0.2 * max_throughput_mbps  # Increase by 20%
 
                 # Increase transfer until target rate is reached
-                while avg_throughput_mbps < current_target_rate:
+                while max_throughput_mbps < current_target_rate:
                     client_socket.sendall(DATA)
                     total_data_sent += len(DATA)
                     elapsed_time = time.time() - start_time
-                    avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+                    current_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
 
-                print(f"[Server] Increasing rate ended: avg_throughput = {avg_throughput_mbps}, time = {datetime.now()}.")
+                    # Update max throughput if current is higher
+                    if current_throughput_mbps > max_throughput_mbps:
+                        max_throughput_mbps = current_throughput_mbps
+
+                print(f"[Server] Increasing phase ended: max_throughput = {max_throughput_mbps:.2f} Mbps, time = {datetime.now()}.")
 
             elif args.time_based_phase:
                 print("[Server] Increasing phase based on time.")
@@ -101,12 +104,15 @@ else:  # Reverse mode: server sends data to client
                     client_socket.sendall(DATA)
                     total_data_sent += len(DATA)
                     elapsed_time = time.time() - start_time
-                    avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
-                    
+                    current_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+
+                    # Update max throughput if current is higher
+                    if current_throughput_mbps > max_throughput_mbps:
+                        max_throughput_mbps = current_throughput_mbps
 
             # Phase 2: Constant Rate Phase
             constant_phase_end = time.time() + args.consphase_time
-            bytes_per_second = avg_throughput_mbps * 1024 * 1024 / 8
+            bytes_per_second = max_throughput_mbps * 1024 * 1024 / 8
             print(f"[Server] Constant rate phase started at {datetime.now()}")
 
             while time.time() < constant_phase_end:
@@ -114,7 +120,7 @@ else:  # Reverse mode: server sends data to client
                 client_socket.sendall(DATA[:chunk_size])
                 total_data_sent += chunk_size
 
-            print(f"[Server] Constant rate ended: avg_throughput = {avg_throughput_mbps}, time = {datetime.now()}.")
+            print(f"[Server] Constant rate ended: max_throughput = {max_throughput_mbps:.2f} Mbps, time = {datetime.now()}.")
 
         else:
             # Non-constant rate, either bytes or time-based transfer
