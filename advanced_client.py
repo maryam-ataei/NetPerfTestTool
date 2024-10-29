@@ -34,7 +34,8 @@ try:
     print(f"Connected to server at {SERVER_IP}:{SERVER_PORT}")
 
     # Send mode to the server ('N' for Normal, 'R' for Reverse)
-    client_socket.sendall(args.mode.encode())
+    mode = 'R' if args.reverse else 'N'
+    client_socket.sendall(mode.encode())
 
     if args.reverse:  # Reverse Mode: Receive data from the server
         print("Reverse Mode: Receiving data from the server.")

@@ -94,6 +94,7 @@ else:  # Reverse mode: server sends data to client
                     elapsed_time = time.time() - start_time
                     avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
 
+                print(f"[Server] Increasing rate ended: avg_throughput = {avg_throughput_mbps}, time = {datetime.now()}.")
 
             elif args.time_based_phase:
                 print("[Server] Increasing phase based on time.")
@@ -115,6 +116,8 @@ else:  # Reverse mode: server sends data to client
                 chunk_size = min(BUFFER_SIZE, int(bytes_per_second))
                 client_socket.sendall(DATA[:chunk_size])
                 total_data_sent += chunk_size
+
+            print(f"[Server] Constant rate ended: total_bytes = {total_data_sent}, time = {datetime.now()}.")
 
         else:
             # Non-constant rate, either bytes or time-based transfer
