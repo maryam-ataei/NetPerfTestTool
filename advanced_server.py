@@ -84,11 +84,8 @@ else:  # Reverse mode: server sends data to client
                     # Subsequent iterations increase from the previous constant rate
                     current_target_rate = avg_throughput_mbps + 0.2 * avg_throughput_mbps  # Increase by 20%
 
-                # Calculate target bytes for the increasing phase
-                target_byte_sent = current_target_rate * 1024 * 1024 / 8
-
                 # Increase transfer until target rate is reached
-                while total_data_sent < target_byte_sent:
+                while avg_throughput_mbps < current_target_rate:
                     client_socket.sendall(DATA)
                     total_data_sent += len(DATA)
                     elapsed_time = time.time() - start_time
@@ -117,7 +114,7 @@ else:  # Reverse mode: server sends data to client
                 client_socket.sendall(DATA[:chunk_size])
                 total_data_sent += chunk_size
 
-            print(f"[Server] Constant rate ended: total_bytes = {total_data_sent}, time = {datetime.now()}.")
+            print(f"[Server] Constant rate ended: avg_throughput = {avg_throughput_mbps}, time = {datetime.now()}.")
 
         else:
             # Non-constant rate, either bytes or time-based transfer
