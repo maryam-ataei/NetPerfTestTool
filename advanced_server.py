@@ -9,7 +9,7 @@ parser.add_argument('-p', '--port', type=int, default=5201, help="Server port (d
 parser.add_argument('-iter', '--iterations', type=int, default=1, help="Number of iterations for data transfer in reverse mode")
 parser.add_argument('--sleep', type=int, default=0, help="Sleep duration in seconds between iterations")
 parser.add_argument('--constant_rate', action='store_true', help="Enable constant rate phase after normal transfer")
-parser.add_argument('--phase_time', type=int, default=5, help="Duration of constant rate phase in seconds")
+parser.add_argument('--consphase_time', type=int, default=5, help="Duration of constant rate phase in seconds")
 parser.add_argument('--target_rate', type=int, default=None, help="Target rate in Mbps for increasing phase")
 parser.add_argument('--rate_based_phase', action='store_true', help="Increase data transfer based on reaching target rate")
 parser.add_argument('--time_based_phase', type=int, help="Increase data transfer for a specific time (in seconds)")
@@ -62,24 +62,38 @@ if mode == 'N':  # Normal mode: client sends data to server
 else:  # Reverse mode: server sends data to client
     print("Reverse mode: server is sending data to client.")
 
-    max_throughput_mbps = 0  # To store max throughput during increasing phase
+    total_data_sent = 0
+    avg_throughput_mbps = 0  # To store average throughput during increasing phase
 
     for i in range(args.iterations):
-        total_data_sent = 0
-        start_time = time.time()
 
         print(f"[Server] Iteration {i+1} started at {datetime.now()}")
+
+        start_time = time.time()
 
         if args.constant_rate:
             # Phase 1: Increasing Phase
             if args.rate_based_phase and args.target_rate:
                 print("[Server] Increasing phase based on target rate.")
+
+                # Set target rate for the current iteration
+                if i == 0:
+                    # First iteration uses the initial target rate
+                    current_target_rate = args.target_rate
+                else:
+                    # Subsequent iterations increase from the previous constant rate
+                    current_target_rate = avg_throughput_mbps + 0.2 * avg_throughput_mbps  # Increase by 20%
+
+                # Calculate target bytes for the increasing phase
+                target_byte_sent = current_target_rate * 1024 * 1024 / 8
+
                 # Increase transfer until target rate is reached
-                while max_throughput_mbps < args.target_rate:
+                while total_data_sent < target_byte_sent:
                     client_socket.sendall(DATA)
                     total_data_sent += len(DATA)
                     elapsed_time = time.time() - start_time
-                    max_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+                    avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+
 
             elif args.time_based_phase:
                 print("[Server] Increasing phase based on time.")
@@ -88,12 +102,15 @@ else:  # Reverse mode: server sends data to client
                 while time.time() < phase_end_time:
                     client_socket.sendall(DATA)
                     total_data_sent += len(DATA)
+                    elapsed_time = time.time() - start_time
+                    avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+                    
 
             # Phase 2: Constant Rate Phase
-            constant_phase_end = time.time() + args.phase_time
-            bytes_per_second = max_throughput_mbps * 1024 * 1024 / 8
-
+            constant_phase_end = time.time() + args.consphase_time
+            bytes_per_second = avg_throughput_mbps * 1024 * 1024 / 8
             print(f"[Server] Constant rate phase started at {datetime.now()}")
+
             while time.time() < constant_phase_end:
                 chunk_size = min(BUFFER_SIZE, int(bytes_per_second))
                 client_socket.sendall(DATA[:chunk_size])
