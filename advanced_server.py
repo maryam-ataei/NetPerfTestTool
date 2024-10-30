@@ -62,10 +62,9 @@ if mode == 'N':  # Normal mode: client sends data to server
 else:  # Reverse mode: server sends data to client
     print("Reverse mode: server is sending data to client.")
 
-    total_data_sent = 0
-    avg_throughput_mbps = 0  # To store average throughput during increasing phase
-
     for i in range(args.iterations):
+        total_data_sent = 0  # Reset total data sent for each iteration
+        avg_throughput_mbps = 0  # Reset avg throughput
 
         print(f"[Server] Iteration {i+1} started at {datetime.now()}")
 
@@ -78,42 +77,80 @@ else:  # Reverse mode: server sends data to client
 
                 # Set target rate for the current iteration
                 if i == 0:
-                    # First iteration uses the initial target rate
                     current_target_rate = args.target_rate
                 else:
-                    # Subsequent iterations increase from the previous constant rate
-                    current_target_rate = avg_throughput_mbps + 0.2 * avg_throughput_mbps  # Increase by 20%
+                    current_target_rate = args.target_rate * (1 + 0.2 * i)  # Increase by 20% per iteration
+
+                current_byte_send = current_target_rate * (1024 * 1024) / 8
 
                 # Increase transfer until target rate is reached
-                while avg_throughput_mbps < current_target_rate:
-                    client_socket.sendall(DATA)
-                    total_data_sent += len(DATA)
-                    elapsed_time = time.time() - start_time
-                    avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+                while total_data_sent < current_byte_send:
+                    remaining_bytes = current_byte_send - total_data_sent
+                    chunk_size = min(len(DATA), int(remaining_bytes))
+
+                    if chunk_size <= 0:
+                        break
+
+                    client_socket.sendall(DATA[:chunk_size])
+                    total_data_sent += chunk_size
 
             elif args.time_based_phase:
                 print("[Server] Increasing phase based on time.")
-                # Increase transfer for the specified time
-                phase_end_time = start_time + args.time_based_phase
-                while time.time() < phase_end_time:
+
+                increasing_phase_end = time.time() + args.time_based_phase
+
+                while time.time() < increasing_phase_end:
                     client_socket.sendall(DATA)
                     total_data_sent += len(DATA)
                     elapsed_time = time.time() - start_time
-                    avg_throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
-                    
-            print(f"[Server] Increasing rate ended: avg_throughput = {avg_throughput_mbps}, time = {datetime.now()}.")
+                    throughput_mbps = (total_data_sent * 8 / (1024 * 1024)) / elapsed_time
+
+                current_byte_send = total_data_sent
+
+
+            print(f"[Server] Increasing phase ended, total_data_sent = {total_data_sent / (1024 * 1024):.2f} MB")
 
             # Phase 2: Constant Rate Phase
             constant_phase_end = time.time() + args.consphase_time
-            bytes_per_second = avg_throughput_mbps * 1024 * 1024 / 8
-            print(f"[Server] Constant rate phase started at {datetime.now()}")
+
+            # Target bytes for the constant phase
+            bytes_in_constant_rate = current_byte_send  # Target bytes from the increasing phase
+            bytes_per_second = bytes_in_constant_rate / args.consphase_time  # Calculate bytes per second
+
+            print(f"[Server] Constant rate phase started at {datetime.now()} with target bytes {bytes_in_constant_rate:.2f} B")
+
+            interval = 0.01  # Interval in seconds (10 ms)
+            bytes_per_interval = bytes_per_second * interval  # Bytes to send per interval
+
+            # Track start time for pacing
+            start_time = time.time()
+
+            # Reset constant phase-specific data sent
+            constant_phase_data_sent = 0
 
             while time.time() < constant_phase_end:
-                chunk_size = min(BUFFER_SIZE, int(bytes_per_second))
-                client_socket.sendall(DATA[:chunk_size])
-                total_data_sent += chunk_size
+                # Calculate remaining bytes to send in this interval
+                remaining_bytes = bytes_in_constant_rate - constant_phase_data_sent
+                if remaining_bytes <= 0:
+                    print("remaining_bytes is less than zero")
+                    break
 
-            print(f"[Server] Constant rate ended: avg_throughput = {avg_throughput_mbps}, time = {datetime.now()}.")
+                # Calculate how many bytes to send in this interval
+                chunk_size = min(int(bytes_per_interval), len(DATA))
+                chunk_size = min(chunk_size, int(remaining_bytes))  # Adjust chunk size
+
+                # Send the chunk
+                client_socket.sendall(DATA[:chunk_size])
+                constant_phase_data_sent += chunk_size
+
+                # Calculate elapsed time and sleep for pacing
+                elapsed_time = time.time() - start_time
+                sleep_time = interval - (elapsed_time % interval)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+
+            total_data_sent += constant_phase_data_sent  # Update total data sent
+            print(f"[Server] Constant rate ended: total_data_sent = {total_data_sent / (1024 * 1024):.2f} MB, time = {datetime.now()}.")
 
         else:
             # Non-constant rate, either bytes or time-based transfer
