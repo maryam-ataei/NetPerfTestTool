@@ -3,236 +3,158 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <getopt.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <sys/time.h>
 #include <time.h>
 
-#define BUFFER_SIZE 131072  // 128 KB
+#define SERVER_PORT 5201
+#define BUFFER_SIZE 128 * 1024  // 128 KB buffer size
+#define INTERVAL 0.01           // 10 ms interval for pacing
 
-// Function to handle the client connection
-void handle_client(int client_socket, int iterations, int sleep_duration, int constant_rate,
-                   int phase_time, int target_rate, int rate_based_phase, int time_based_phase,
-                   int bytes, int duration, int reverse_mode);
+void handle_error(const char *msg) {
+    perror(msg);
+    exit(EXIT_FAILURE);
+}
 
-// Main function
-int main(int argc, char *argv[]) {
-    int server_socket, client_socket, port = 5201;
-    struct sockaddr_in server_addr, client_addr;
-    socklen_t addr_len = sizeof(client_addr);
+void normal_mode(int client_socket) {
+    char buffer[BUFFER_SIZE];
+    ssize_t bytes_received;
+    size_t total_data_received = 0;
 
-    // Variables for options
-    int iterations = 1, sleep_duration = 0, constant_rate = 0;
-    int phase_time = 5, target_rate = 0, rate_based_phase = 0;
-    int time_based_phase = 0, bytes = 0, duration = 0, reverse_mode = 0;
+    printf("Normal mode: client is sending data to server.\n");
 
-    // Command-line options
-    static struct option long_options[] = {
-        {"port", required_argument, 0, 'p'},
-        {"iterations", required_argument, 0, 'i'},
-        {"sleep", required_argument, 0, 'S'},
-        {"constant_rate", no_argument, 0, 'C'},
-        {"phase_time", required_argument, 0, 'c'},
-        {"target_rate", required_argument, 0, 't'},
-        {"rate_based_phase", no_argument, 0, 'R'},
-        {"time_based_phase", required_argument, 0, 'T'},
-        {"bytes", required_argument, 0, 'b'},
-        {"time", required_argument, 0, 'd'},
-        {"reverse", no_argument, 0, 'r'},
-        {0, 0, 0, 0}
-    };
+    while ((bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0)) > 0) {
+        total_data_received += bytes_received;
+    }
 
-    int option_index = 0, opt;
-    while ((opt = getopt_long(argc, argv, "p:i:S:c:t:T:b:d:rC", long_options, &option_index)) != -1) {
-        switch (opt) {
-            case 'p':
-                port = atoi(optarg);
+    printf("Total data received: %.2f MB\n", total_data_received / (1024.0 * 1024.0));
+
+    if (bytes_received < 0) {
+        handle_error("recv failed");
+    }
+}
+
+void reverse_mode(int client_socket, int iterations, int sleep_duration, int consphase_time, 
+                  int target_rate, int rate_based_phase, int time_based_phase, int bytes, int time_sec) {
+    char data[BUFFER_SIZE];
+    memset(data, 'X', BUFFER_SIZE);
+    size_t total_data_sent = 0;
+    float current_byte_send = 0;
+    struct timespec req, rem;
+    req.tv_sec = 0;
+    req.tv_nsec = INTERVAL * 1e9;
+
+    for (int i = 0; i < iterations; i++) {
+        total_data_sent = 0;
+        printf("[Server] Iteration %d started.\n", i + 1);
+
+        // Phase 1: Increasing Phase
+        if (rate_based_phase && target_rate) {
+            printf("[Server] Increasing phase based on target rate.\n");
+            if (i == 0) {
+                current_byte_send = target_rate * (1024 * 1024) / 8;
+            } else {
+                current_byte_send = target_rate * (1 + 0.2 * i) * (1024 * 1024) / 8;
+            }
+
+            size_t bytes_to_send = current_byte_send;
+
+            while (total_data_sent < bytes_to_send) {
+                size_t chunk_size = (bytes_to_send - total_data_sent) > BUFFER_SIZE ? BUFFER_SIZE : (bytes_to_send - total_data_sent);
+                if (send(client_socket, data, chunk_size, 0) < 0) {
+                    handle_error("send failed");
+                }
+                total_data_sent += chunk_size;
+            }
+
+            printf("[Server] Increasing phase ended, total_data_sent = %.2f MB\n", total_data_sent / (1024.0 * 1024.0));
+        }
+
+        // Phase 2: Constant Rate Phase
+        printf("[Server] Constant rate phase started.\n");
+        size_t bytes_per_second = current_byte_send / consphase_time;
+        size_t bytes_per_interval = bytes_per_second * INTERVAL;
+        size_t constant_phase_data_sent = 0;
+
+        clock_t start_time = clock();
+        clock_t constant_phase_end = start_time + consphase_time * CLOCKS_PER_SEC;
+
+        while (clock() < constant_phase_end) {
+            size_t remaining_bytes = current_byte_send - constant_phase_data_sent;
+            if (remaining_bytes <= 0) {
                 break;
-            case 'i':
-                iterations = atoi(optarg);
-                break;
-            case 'S':
-                sleep_duration = atoi(optarg);
-                break;
-            case 'c':
-                phase_time = atoi(optarg);
-                break;
-            case 't':
-                target_rate = atoi(optarg);
-                break;
-            case 'T':
-                time_based_phase = atoi(optarg);
-                break;
-            case 'b':
-                bytes = atoi(optarg);
-                break;
-            case 'd':
-                duration = atoi(optarg);
-                break;
-            case 'C':
-                constant_rate = 1;
-                break;
-            case 'R':
-                rate_based_phase = 1;
-                break;
-            case 'r':
-                reverse_mode = 1;
-                break;
-            default:
-                fprintf(stderr, "Invalid option\n");
-                exit(EXIT_FAILURE);
+            }
+
+            size_t chunk_size = remaining_bytes > bytes_per_interval ? bytes_per_interval : remaining_bytes;
+            if (send(client_socket, data, chunk_size, 0) < 0) {
+                handle_error("send failed");
+            }
+            constant_phase_data_sent += chunk_size;
+
+            nanosleep(&req, &rem);  // Pacing
+        }
+
+        total_data_sent += constant_phase_data_sent;
+        printf("[Server] Constant rate ended: total_data_sent = %.2f MB\n", total_data_sent / (1024.0 * 1024.0));
+
+        // Sleep between iterations
+        if (sleep_duration > 0) {
+            printf("[Server] Sleeping for %d seconds.\n", sleep_duration);
+            sleep(sleep_duration);
         }
     }
+}
 
-    // Create a TCP socket
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket < 0) {
-        perror("Socket creation failed");
-        exit(EXIT_FAILURE);
+int main(int argc, char *argv[]) {
+    int server_socket, client_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+    char mode;
+
+    // Server socket setup
+    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        handle_error("socket creation failed");
     }
 
-    // Set up the server address structure
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(SERVER_PORT);
 
-    // Bind the socket to the specified port
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind failed");
-        close(server_socket);
-        exit(EXIT_FAILURE);
+        handle_error("bind failed");
     }
 
-    // Listen for incoming connections
-    if (listen(server_socket, 5) < 0) {
-        perror("Listen failed");
-        close(server_socket);
-        exit(EXIT_FAILURE);
+    if (listen(server_socket, 1) < 0) {
+        handle_error("listen failed");
     }
 
-    printf("Server is listening on 0.0.0.0:%d\n", port);
+    printf("Server is listening on port %d\n", SERVER_PORT);
 
-    // Accept a client connection
-    client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &addr_len);
-    if (client_socket < 0) {
-        perror("Client accept failed");
-        close(server_socket);
-        exit(EXIT_FAILURE);
+    // Accept client connection
+    if ((client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_addr_len)) < 0) {
+        handle_error("accept failed");
     }
 
     printf("Client connected.\n");
 
-    // Handle the client connection
-    handle_client(client_socket, iterations, sleep_duration, constant_rate,
-                  phase_time, target_rate, rate_based_phase, time_based_phase,
-                  bytes, duration, reverse_mode);
+    // Receive mode instruction from client
+    if (recv(client_socket, &mode, 1, 0) <= 0) {
+        handle_error("recv failed");
+    }
 
-    // Close the sockets
+    if (mode == 'N') {
+        normal_mode(client_socket);
+    } else if (mode == 'R') {
+        // Example parameters for reverse mode
+        reverse_mode(client_socket, 1, 0, 5, 100, 1, 0, 0, 0);
+    } else {
+        printf("Invalid mode received.\n");
+        close(client_socket);
+        close(server_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // Close sockets
     close(client_socket);
     close(server_socket);
+
     return 0;
-}
-
-// Function to handle client connection and data transfer
-void handle_client(int client_socket, int iterations, int sleep_duration, int constant_rate,
-                   int phase_time, int target_rate, int rate_based_phase, int time_based_phase,
-                   int bytes, int duration, int reverse_mode) {
-    char buffer[BUFFER_SIZE];
-    memset(buffer, 'X', BUFFER_SIZE);
-
-    if (reverse_mode) {
-        printf("Reverse Mode: Sending data to the client.\n");
-
-        for (int iter = 0; iter < iterations; iter++) {
-            printf("[Server] Iteration %d started\n", iter + 1);
-
-            // Increasing Phase
-            double total_data_sent = 0;
-            double target_bytes = (target_rate * 1024 * 1024) / 8;  // Convert target rate from Mbps to bytes/sec
-            struct timeval start_time, current_time;
-            gettimeofday(&start_time, NULL);
-
-            while (total_data_sent < target_bytes) {
-                // Calculate remaining bytes to send
-                ssize_t remaining_bytes = target_bytes - total_data_sent;
-                ssize_t chunk_size = remaining_bytes < BUFFER_SIZE ? remaining_bytes : BUFFER_SIZE;
-
-                // Send data in chunks, capping at target_bytes
-                ssize_t sent_bytes = send(client_socket, buffer, chunk_size, 0);
-                if (sent_bytes <= 0) {
-                    perror("Error sending data");
-                    break;
-                }
-                total_data_sent += sent_bytes;
-
-                // Break the loop if we've reached the target bytes
-                if (total_data_sent >= target_bytes) {
-                    break;
-                }
-
-                // Calculate elapsed time for progress reporting
-                gettimeofday(&current_time, NULL);
-                double elapsed_time = (current_time.tv_sec - start_time.tv_sec) +
-                                      (current_time.tv_usec - start_time.tv_usec) / 1000000.0;
-
-                // Print real-time progress
-                if (elapsed_time > 0) {
-                    double throughput_mbps = (total_data_sent * 8) / (1024 * 1024 * elapsed_time);
-                    printf("\r[Server] Current throughput: %.2f Mbps, Total sent: %.2f MB", 
-                           throughput_mbps, total_data_sent / (1024.0 * 1024.0));
-                    fflush(stdout);
-                }
-            }
-
-            // Print the final result after increasing phase
-            printf("\n[Server] Increasing phase ended, total_data_sent = %.2f MB\n", total_data_sent / (1024.0 * 1024.0));
-
-
-            // Constant Rate Phase
-            double bytes_per_second = (target_rate * 1024 * 1024) / 8;
-            gettimeofday(&start_time, NULL);
-
-            while (1) {
-                gettimeofday(&current_time, NULL);
-                double elapsed_time = (current_time.tv_sec - start_time.tv_sec) +
-                                      (current_time.tv_usec - start_time.tv_usec) / 1000000.0;
-
-                if (elapsed_time >= phase_time) break;
-
-                ssize_t sent_bytes = send(client_socket, buffer, (size_t)bytes_per_second, 0);
-                if (sent_bytes <= 0) {
-                    perror("Error sending data");
-                    break;
-                }
-            }
-
-            printf("[Server] Constant rate phase ended.\n");
-
-            // Update the target rate for the next iteration (increase by 20%)
-            target_rate = target_rate + (target_rate * 0.2);
-
-            // Sleep between iterations if specified
-            if (sleep_duration > 0) {
-                printf("[Server] Iteration %d: Sleeping for %d seconds\n", iter + 1, sleep_duration);
-                sleep(sleep_duration);
-            }
-        }
-    } else {
-        printf("Normal Mode: Receiving data from the client.\n");
-
-        int total_data_received = 0;
-        while (1) {
-            int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
-            if (bytes_received <= 0) {
-                break;  // Client closed connection or error occurred
-            }
-            total_data_received += bytes_received;
-        }
-
-        double throughput_mbps = (total_data_received * 8.0) / (1024 * 1024);
-        printf("Total data received: %.2f MB, Throughput: %.2f Mbps\n",
-               total_data_received / (1024.0 * 1024), throughput_mbps);
-    }
 }
